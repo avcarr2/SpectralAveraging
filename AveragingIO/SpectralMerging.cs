@@ -1,5 +1,7 @@
-﻿using MassSpectrometry;
+﻿using System.Collections.Concurrent;
+using MassSpectrometry;
 using MzLibUtil;
+using System.Linq;
 
 namespace SpectralAveraging
 {
@@ -84,13 +86,21 @@ namespace SpectralAveraging
             // this will clipping and averaging for y values as indicated in the settings
             double[] xArray = new double[xValuesBin.Length];
             double[] yArray = new double[yValuesBin.Length];
-            // target for optimization here
+
             for (int i = 0; i < yValuesBin.Length; i++)
             {
-                // linq is probably slow 
                 xArray[i] = xValuesBin[i].Where(p => p != 0).Average();
-                yArray[i] = ProcessSingleMzArray(yValuesBin[i], options);
             }
+
+            var rangePartitioner = Partitioner.Create(0, yValuesBin.GetLength(0));
+            Parallel.ForEach(rangePartitioner, (range, loopState) =>
+            {
+                for (int i = range.Item1; i < range.Item2; i++)
+                {
+                    yArray[i] = ProcessSingleMzArray(yValuesBin[i], options); 
+                }
+            }); 
+
 
             // Create new MsDataScan to return
             MzRange range = new(min, max);

@@ -9,6 +9,7 @@
   <ItemGroup>
     <PackageReference Include="mzLib" Version="1.0.532" />
     <PackageReference Include="Newtonsoft.Json" Version="9.0.1" />
+    <PackageReference Include="System.Linq.Parallel" Version="4.3.0" />
   </ItemGroup>
 
   <ItemGroup>
