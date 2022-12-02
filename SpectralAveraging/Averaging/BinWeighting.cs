@@ -9,6 +9,7 @@ namespace SpectralAveraging
 {
     public static class BinWeighting
     {
+        
         /// <summary>
         /// Calls the specicic funtion based upon the settings to calcuate the weight for each value when averaging
         /// </summary>

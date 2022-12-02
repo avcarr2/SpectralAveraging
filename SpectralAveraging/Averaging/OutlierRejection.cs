@@ -8,6 +8,10 @@ namespace SpectralAveraging
 {
     public static class OutlierRejection
     {
+        // TODO: outlier rejection really needs to keep track of both the mzvalues and the weighting... 
+        // Potentially may need to refactor the double[] mzvals to an object that includes a dictionary of 
+        // m/z vals and its weighting or some other data structure... 
+
         /// <summary>
         /// Calls the specific rejection function based upon the current static field RejectionType
         /// </summary>
