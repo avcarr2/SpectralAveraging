@@ -25,9 +25,10 @@ namespace SpectralAveraging.DataStructures
         public SortedDictionary<int, double> Weights { get; private set; }
         public double[] Tics { get; private set; }
         public int NumSpectra { get; set; }
+        private int ReferenceSpectraIndex { get; set; }
         private List<double[]> RecalculatedSpectra => PixelStackListToSpectra(); 
 
-        public BinnedSpectra(int numSpectra)
+        public BinnedSpectra(int numSpectra, int referenceSpectraIndex = 0)
         {
             PixelStacks = new List<PixelStack>();
             NoiseEstimates = new SortedDictionary<int, double>();
@@ -35,6 +36,8 @@ namespace SpectralAveraging.DataStructures
             Weights = new SortedDictionary<int, double>();
             NumSpectra = numSpectra; 
             Tics = new double[numSpectra];
+            ReferenceSpectraIndex = referenceSpectraIndex; 
+
         }
 
         private List<double[]> PixelStackListToSpectra()
@@ -262,6 +265,7 @@ namespace SpectralAveraging.DataStructures
 
         public void CalculateWeights()
         {
+            double referenceScale = Weights[ReferenceSpectraIndex]; 
             foreach (var entry in NoiseEstimates)
             {
                 var successScale = ScaleEstimates.TryGetValue(entry.Key,
@@ -272,7 +276,8 @@ namespace SpectralAveraging.DataStructures
                     out double noise);
                 if (!successNoise) continue;
 
-                double weight = 1d / Math.Pow((scale * noise), 2);
+                double scaleFactor = referenceScale / scale;
+                double weight = 1d / Math.Pow((scaleFactor * noise), 2);
 
                 Weights.TryAdd(entry.Key, weight);
             }
