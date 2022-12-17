@@ -36,13 +36,15 @@ namespace SpectralAveraging
         public static double[][] MrsNoiseEstimation(double[][] xArrays, double[][] yArrays,
             int numSpectra, SpectralAveragingOptions options)
         {
-            BinnedSpectra binnedSpectra = new(); 
+            BinnedSpectra binnedSpectra = new(numSpectra); 
             binnedSpectra.ConsumeSpectra(xArrays, yArrays, numSpectra, options.BinSize);
             binnedSpectra.RecalculateTics();
             if(options.PerformNormalization) binnedSpectra.PerformNormalization();
+            // could be async
             binnedSpectra.CalculateNoiseEstimates();
             binnedSpectra.CalculateScaleEstimates();
             binnedSpectra.CalculateWeights();
+            // end 
             binnedSpectra.ProcessPixelStacks(options);
             binnedSpectra.MergeSpectra(); 
             return binnedSpectra.GetMergedSpectrum(); 

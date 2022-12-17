@@ -26,7 +26,7 @@ public class TestBinnedSpectra
     {
         xArrays = new[]
         {
-            new double[] { 0, 1, 2, 3, 3.5, 4 },
+            new double[] { 0, 1, 2, 3, 3.49, 4 },
             new double[] { 0, 1, 2, 3, 4 },
             new double[] { 0.1, 1.1, 2.1, 3.1, 4.1}
         };
@@ -49,14 +49,14 @@ public class TestBinnedSpectra
     [Test]
     public void TestConsumeSpectra()
     {
-        BinnedSpectra binnedSpectra = new();
+        BinnedSpectra binnedSpectra = new(this.numSpectra);
 
         int numSpectra = 3;
         double binSize = 1.0;
 
         binnedSpectra.ConsumeSpectra(xArrays, yArrays, numSpectra, binSize); 
         Assert.True(binnedSpectra.PixelStacks.Count == 5);
-        Assert.That(binnedSpectra.PixelStacks[0].Mz, Is.EqualTo(0.033333d).Within(0.01));
+        Assert.That(binnedSpectra.PixelStacks[0].MzAverage, Is.EqualTo(0.033333d).Within(0.01));
         Assert.That(binnedSpectra.PixelStacks[2].Intensity, 
             Is.EqualTo(new double[] {12, 13, 30}));
     }
@@ -64,11 +64,12 @@ public class TestBinnedSpectra
     [Test]
     public void TestConsumeSpectraUnequalArrayLength()
     {
-        BinnedSpectra binnedSpectra = new();
+        BinnedSpectra binnedSpectra = new(this.numSpectra);
         int numSpectra = 3;
         double binSize = 1.0;
         binnedSpectra.ConsumeSpectra(xArrays, yArrays, numSpectra, binSize);
         Assert.True(binnedSpectra.PixelStacks.Count == 5);
+        Assert.True(binnedSpectra.PixelStacks.All(i => i.Length == 3));
         // 12.5 is the correct answer if the binning and averaging is correct. 
         // Value will be exactly 12.5, so okay to use 12.5 explicitly.  
         // ReSharper disable once CompareOfFloatsByEqualityOperator
@@ -78,7 +79,7 @@ public class TestBinnedSpectra
     [Test]
     public void TestPerformNormalization()
     {
-        BinnedSpectra bs = new();
+        BinnedSpectra bs = new(this.numSpectra);
         bs.ConsumeSpectra(xArrays, yArrays, numSpectra, binSize);
         bs.RecalculateTics();
         bs.PerformNormalization();
@@ -91,8 +92,10 @@ public class TestBinnedSpectra
     {
         // This is just testing to see if the noise estimates work.
         // The values produces by the NoiseEstimation are tested elsewhere. 
-        BinnedSpectra bs = new();
+        BinnedSpectra bs = new(this.numSpectra);
         bs.ConsumeSpectra(xArrays, yArrays, numSpectra, binSize);
+        bs.RecalculateTics();
+        bs.PerformNormalization();
         bs.CalculateNoiseEstimates();
         foreach (var estimate in bs.NoiseEstimates)
         {
@@ -104,16 +107,16 @@ public class TestBinnedSpectra
     [Test]
     public void TestScaleEstimate()
     {
-        BinnedSpectra bs = new();
+        BinnedSpectra bs = new(this.numSpectra);
         bs.ConsumeSpectra(xArrays, yArrays, numSpectra, binSize);
         bs.RecalculateTics();
         bs.PerformNormalization();
         bs.CalculateScaleEstimates();
         double[] expected = new[]
         {
-            0.0005797, 
-            0.00054368, 
-            0.002552
+            1.0d, 
+            0.937844, 
+            4.402658
         };
         Assert.That(bs.ScaleEstimates.Values.ToArray(), 
             Is.EqualTo(expected).Within(0.00001));
@@ -122,7 +125,7 @@ public class TestBinnedSpectra
     [Test]
     public void TestRecalculateTics()
     {
-        BinnedSpectra bs = new();
+        BinnedSpectra bs = new(this.numSpectra);
         bs.ConsumeSpectra(xArrays, yArrays, numSpectra, binSize);
         bs.RecalculateTics();
         double[] expected = new double[] { 59.5, 65d, 150d };
@@ -132,7 +135,7 @@ public class TestBinnedSpectra
     [Test]
     public void TestCalculateWeights()
     {
-        BinnedSpectra bs = new();
+        BinnedSpectra bs = new(this.numSpectra);
         bs.ConsumeSpectra(xArrays, yArrays, numSpectra, binSize);
         bs.RecalculateTics();
         bs.PerformNormalization();
@@ -141,9 +144,9 @@ public class TestBinnedSpectra
         bs.CalculateWeights();
         double[] expectedWeights = new[]
         {
-            4580099255.639d, 
-            5717338995.563, 
-            55263874.7829, 
+            1539.23913, 
+            1921.432574,
+            18.5725928
         }; 
         Assert.That(bs.Weights.Values.ToArray(), 
             Is.EqualTo(expectedWeights).Within(0.01));
@@ -154,7 +157,7 @@ public class TestBinnedSpectra
     {
         SpectralAveragingOptions options = new(); 
         options.SetDefaultValues();
-        BinnedSpectra bs = new();
+        BinnedSpectra bs = new(this.numSpectra);
         bs.ConsumeSpectra(xArrays, yArrays, numSpectra, binSize);
         bs.RecalculateTics();
         bs.PerformNormalization();

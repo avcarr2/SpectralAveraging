@@ -1,8 +1,15 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Data;
 using System.Linq;
+using System.Linq.Expressions;
+using System.Reflection.Metadata.Ecma335;
+using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using System.Threading.Tasks;
+using MathNet.Numerics;
 using Nett;
 using SpectralAveraging.NoiseEstimates;
 
@@ -12,19 +19,33 @@ namespace SpectralAveraging.DataStructures
     public class BinnedSpectra
     {
         public List<PixelStack> PixelStacks { get; set; }
-        public Dictionary<int, double> NoiseEstimates { get; private set; }
-        public Dictionary<int, double> ScaleEstimates { get; private set; }
-        public Dictionary<int, double> Weights { get; private set; }
+        // TODO: Concurrent dictionaries should be temporary, and these should be sorted Dictionaries. 
+        public SortedDictionary<int, double> NoiseEstimates { get; private set; }
+        public SortedDictionary<int, double> ScaleEstimates { get; private set; }
+        public SortedDictionary<int, double> Weights { get; private set; }
         public double[] Tics { get; private set; }
-        public int NumSpectra => PixelStacks[0].Intensity.Count;
-        private List<double[]> RecalculatedSpectra { get; set; }
+        public int NumSpectra { get; set; }
+        private List<double[]> RecalculatedSpectra => PixelStackListToSpectra(); 
 
-        public BinnedSpectra()
+        public BinnedSpectra(int numSpectra)
         {
             PixelStacks = new List<PixelStack>();
-            NoiseEstimates = new Dictionary<int, double>();
-            ScaleEstimates = new Dictionary<int, double>();
-            Weights = new Dictionary<int, double>();
+            NoiseEstimates = new SortedDictionary<int, double>();
+            ScaleEstimates = new SortedDictionary<int, double>();
+            Weights = new SortedDictionary<int, double>();
+            NumSpectra = numSpectra; 
+            Tics = new double[numSpectra];
+        }
+
+        private List<double[]> PixelStackListToSpectra()
+        {
+            List<double[]> results = new(); 
+            for (int i = 0; i < NumSpectra; i++)
+            {
+                results.Add(PopIntensityValuesFromPixelStackList(i)); 
+            }
+
+            return results; 
         }
 
         public void ProcessPixelStacks(SpectralAveragingOptions options)
@@ -55,81 +76,144 @@ namespace SpectralAveraging.DataStructures
 
             for (int i = 0; i < numSpectra; i++)
             {
-                // currently this updates the y value with the most recent value from the array. 
-                // what it really needs to do is a linear interpolation. 
-
-                listBinValues.Add(CreateBinValueList(xArrays[i], yArrays[i], min, binSize));
+               listBinValues.Add(CreateBinValueList(xArrays[i], yArrays[i], min, binSize));
+               listBinValues[i].Sort((m, n) => m.Bin.CompareTo(n.Bin));
             }
-
-            int[] spectraId = Enumerable.Range(0, numSpectra).ToArray(); 
 
             for (int i = 0; i < numberOfBins; i++)
             {
                 List<double> xVals = new();
                 List<double> yVals = new();
-                foreach (List<BinValue> binValList in listBinValues)
+                foreach(var binValList in listBinValues)
                 {
-                    var valsInBin = binValList
-                        .Where(m => m.Bin == i);
-                    if (valsInBin.Count() > 1)
+                    List<BinValue> binValRecord = new();
+                    int index = binValList.BinarySearch(new BinValue() { Bin = i }, new BinValueComparer());
+                    if (index < 0)
                     {
-                        xVals.Add(valsInBin.Average(m => m.Mz));
-                        yVals.Add(valsInBin.Average(m => m.Intensity));
+                        index = ~index;
                     }
-                    else
+                    int k = 0;
+                    while (k + index <= binValList.Count - 1)
                     {
-                        xVals.Add(valsInBin.First().Mz);
-                        yVals.Add(valsInBin.First().Intensity);
+                        // binary search gets just the first index that it finds, so you 
+                        // need to check on the left and right side for elements that 
+                        // match the bin value. 
+
+                        if (index + k < binValList.Count && binValList[index + k].Bin == i)
+                        {
+                            binValRecord.Add(binValList[index + k]);
+                            if (k == 0) k++; continue; 
+                        }
+
+                        if (index - k > 0 && binValList[index - k].Bin == i )
+                        {
+                            binValRecord.Add(binValList[index - k]);
+                        }
+
+                        k++; 
                     }
+
+                    if (binValRecord.Count() > 1)
+                    {
+                        xVals.Add(binValRecord.Average(m => m.Mz));
+                        yVals.Add(binValRecord.Average(m => m.Intensity));
+                        continue; 
+                    }
+                    if (binValRecord.Count == 0)
+                    {
+                        xVals.Add(0); 
+                        yVals.Add(0);
+                        continue; 
+                    }
+                    xVals.Add(binValRecord.First().Mz);
+                    yVals.Add(binValRecord.First().Intensity);
                 }
-                PixelStacks.Add(new PixelStack(xVals, yVals, spectraId));
+
+                if (xVals.Count > NumSpectra || yVals.Count > NumSpectra)
+                {
+
+                }
+
+                PixelStacks.Add(new PixelStack(xVals, yVals));
             }
         }
 
         public void PerformNormalization()
         {
-            Parallel.For(0, PixelStacks.Count, i =>
+            for (int i = 0; i < PixelStacks.Count; i++)
             {
-                // pixelStacks[i].Length will be the number of spectra to be averaged, 
-                // which is equal to tics. 
                 for (int j = 0; j < PixelStacks[i].Length; j++)
                 {
-                    PixelStacks[i].Intensity[j] /= Tics[j];
+                    double temp = PixelStacks[i].GetIntensityAtIndex(j) / Tics[j];
+                    PixelStacks[i].ModifyPixelIntensity(j, temp);
                 }
-            }); 
+            }
         }
 
         public void CalculateNoiseEstimates(WaveletType waveletType = WaveletType.Haar, 
             double epsilon = 0.01, int maxIterations = 25)
         {
-            // note that noise estimate needs to be run on the pixel stacks. 
-            for (int i = 0; i < NumSpectra; i++)
+            if (!RecalculatedSpectra.Any())
             {
-                double[] tempValArray = PopIntensityValuesFromPixelStackList(i);
-                bool success = MRSNoiseEstimator.MRSNoiseEstimation(tempValArray, epsilon, out double noiseEstimate,
-                    waveletType: waveletType, maxIterations: maxIterations);
-                if (!success || double.IsNaN(noiseEstimate))
+                for (int i = 0; i < NumSpectra; i++)
                 {
-                    noiseEstimate = BasicStatistics.CalculateStandardDeviation(tempValArray); 
+                    double[] tempValArray = PopIntensityValuesFromPixelStackList(i);
+                    bool success = MRSNoiseEstimator.MRSNoiseEstimation(tempValArray, epsilon, out double noiseEstimate,
+                        waveletType: waveletType, maxIterations: maxIterations);
+                    if (!success || double.IsNaN(noiseEstimate))
+                    {
+                        noiseEstimate = BasicStatistics.CalculateStandardDeviation(tempValArray);
+                    }
+                    NoiseEstimates.TryAdd(i, noiseEstimate);
                 }
-                NoiseEstimates.Add(i, noiseEstimate);
+
+                return; 
             }
+
+            ConcurrentDictionary<int, double> tempConcurrentDictionary = new(); 
+            RecalculatedSpectra
+                .Select((w, i) => new { Index = i, Array = w })
+                .AsParallel()
+                .ForAll(x =>
+                {
+                    bool success = MRSNoiseEstimator.MRSNoiseEstimation(x.Array, epsilon, out double noiseEstimate,
+                        waveletType: waveletType, maxIterations: maxIterations);
+                    if (!success || double.IsNaN(noiseEstimate))
+                    {
+                        noiseEstimate = BasicStatistics.CalculateStandardDeviation(x.Array);
+                    }
+                    tempConcurrentDictionary.TryAdd(x.Index, noiseEstimate);
+                });
+            NoiseEstimates = new SortedDictionary<int, double>(tempConcurrentDictionary); 
         }
 
         public void CalculateScaleEstimates()
         {
             double reference = 0;
-            for (int i = 0; i < NumSpectra; i++)
+            if (!RecalculatedSpectra.Any())
             {
-                double[] tempValArray = PopIntensityValuesFromPixelStackList(i);
-                double scale = BiweightMidvariance(tempValArray);
-                if (i == 0)
+                for (int i = 0; i < NumSpectra; i++)
                 {
-                    reference = scale;
+                    double[] tempValArray = PopIntensityValuesFromPixelStackList(i);
+                    double scale = BiweightMidvariance(tempValArray);
+                    if (i == 0)
+                    {
+                        reference = scale;
+                    }
+                    ScaleEstimates.TryAdd(i, reference / scale);
                 }
-                ScaleEstimates.Add(i, reference / scale);
+
+                return; 
             }
-            
+            ConcurrentDictionary<int, double> tempScaleEstimates = new();
+            RecalculatedSpectra
+                .Select((w,i) => new {Index = i, Array = w})
+                .AsParallel().ForAll(x =>
+                {
+                    double scale = BiweightMidvariance(x.Array);
+                    tempScaleEstimates.TryAdd(x.Index, Math.Sqrt(scale));
+                });
+            ScaleEstimates = new SortedDictionary<int, double>(tempScaleEstimates); 
         }
 
         private double MedianAbsoluteDeviationFromMedian(double[] array)
@@ -190,47 +274,46 @@ namespace SpectralAveraging.DataStructures
 
                 double weight = 1d / Math.Pow((scale * noise), 2);
 
-                Weights.Add(entry.Key, weight);
+                Weights.TryAdd(entry.Key, weight);
             }
         }
 
         public void RecalculateTics()
         {
-            Tics = new double[NumSpectra];
-            RecalculatedSpectra = new List<double[]>(); 
+            
             for (int i = 0; i < NumSpectra; i++)
             {
-                RecalculatedSpectra.Add(PopIntensityValuesFromPixelStackList(i));
-                Tics[i] = RecalculatedSpectra[i].Sum();
+                foreach (var pixelStack in PixelStacks)
+                {
+                    Tics[i] += pixelStack.Intensity[i];
+                }
             }
         }
 
         public void MergeSpectra()
         {
-            var weights = Weights.Values.ToArray(); 
             Parallel.ForEach(PixelStacks, pixelStack =>
             {
-                pixelStack.Average(weights);
+                pixelStack.Average(Weights);
             });
         }
 
         public double[][] GetMergedSpectrum()
         {
-            double[] xArray = PixelStacks.Select(i => i.Mz).ToArray();
-            double[] yArray = PixelStacks.Select(i => i.MergedValue).ToArray();
+            double[] xArray = PixelStacks.Select(i => i.MergedMzValue).ToArray();
+            double[] yArray = PixelStacks.Select(i => i.MergedIntensityValue).ToArray();
             return new[] { xArray, yArray };
         }
         private static List<BinValue> CreateBinValueList(double[] xArray, double[] yArray,
             double min, double binSize)
         {
             var binIndices = xArray
-                .Select(i => (int)Math.Floor((i - min) / binSize))
-                .ToArray();
+                .Select((w, i) => 
+                    new { Index = i, Bin = (int)Math.Round((w - min) / binSize, MidpointRounding.AwayFromZero) }); 
             List<BinValue> binValues = new List<BinValue>();
-
-            for (int i = 0; i < binIndices.Length; i++)
+            foreach (var bin in binIndices)
             {
-                binValues.Add(new BinValue(binIndices[i], xArray[i], yArray[i]));
+                binValues.Add(new BinValue(bin.Bin, xArray[bin.Index], yArray[bin.Index]));
             }
             return binValues;
         }
@@ -240,12 +323,13 @@ namespace SpectralAveraging.DataStructures
             double[] results = new double[PixelStacks.Count];
             for (int i = 0; i < PixelStacks.Count; i++)
             {
-                results[i] = PixelStacks[i].Intensity[index]; 
+                results[i] = PixelStacks[i].GetIntensityAtIndex(index); 
             }
 
             return results; 
         }
     }
+
     /// <summary>
     /// Record type used to facilitate bin, mz, and intensity matching. 
     /// </summary>
@@ -253,4 +337,12 @@ namespace SpectralAveraging.DataStructures
     /// <param name="Mz"></param>
     /// <param name="Intensity"></param>
     internal readonly record struct BinValue(int Bin, double Mz, double Intensity);
+
+    internal class BinValueComparer : IComparer<BinValue>
+    {
+        public int Compare(BinValue x, BinValue y)
+        {
+            return x.Bin.CompareTo(y.Bin); 
+        }
+    }
 }
