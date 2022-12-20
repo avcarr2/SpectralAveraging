@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Data;
+using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection.Metadata.Ecma335;
@@ -27,6 +28,7 @@ namespace SpectralAveraging.DataStructures
         public SortedDictionary<int, double> Weights { get; private set; }
         public double[] Tics { get; private set; }
         public int NumSpectra { get; set; }
+        public int ReferenceSpectra => GetReferenceSpectra(); 
         private List<double[]> RecalculatedSpectra => PixelStackListToSpectra(); 
         public int ReferenceSpectra { get; }
         /// <summary>
@@ -48,7 +50,7 @@ namespace SpectralAveraging.DataStructures
             NoiseEstimates = new SortedDictionary<int, double>();
             ScaleEstimates = new SortedDictionary<int, double>();
             Weights = new SortedDictionary<int, double>();
-            NumSpectra = numSpectra; 
+            NumSpectra = numSpectra;
             Tics = new double[numSpectra];
             ReferenceSpectra = referenceSpectra; 
         }

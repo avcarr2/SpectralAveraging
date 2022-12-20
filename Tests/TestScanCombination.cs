@@ -163,7 +163,7 @@ namespace Tests
             Console.WriteLine("Simple Average: {0}; Integration {1}; Reference {2}", 
                 estimateSimpleAverage, noiseEstimateAveraged, noiseEstimateReference);
         }
-        private double MedianAbsoluteDeviationFromMedian(double[] array)
+        public double MedianAbsoluteDeviationFromMedian(double[] array)
         {
             double arrayMedian = BasicStatistics.CalculateMedian(array);
             double[] results = new double[array.Length];
@@ -175,7 +175,7 @@ namespace Tests
             return BasicStatistics.CalculateMedian(results);
         }
 
-        private double BiweightMidvariance(double[] array)
+        public double BiweightMidvariance(double[] array)
         {
             double[] y_i = new double[array.Length];
             double[] a_i = new double[array.Length];

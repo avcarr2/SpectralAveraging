@@ -220,7 +220,8 @@ namespace SpectralAveraging
         /// <param name="sValueMin">the lower limit of inclusion in sigma (standard deviation) units</param>
         /// <param name="sValueMax">the higher limit of inclusion in sigma (standard deviation) units</param>
         /// <returns></returns>
-        private static bool SigmaClipping(double value, double median, double standardDeviation, double sValueMin, double sValueMax)
+        private static bool SigmaClipping(double value, double median, 
+            double standardDeviation, double sValueMin, double sValueMax)
         {
             if ((median - value) / standardDeviation > sValueMin)
             {
