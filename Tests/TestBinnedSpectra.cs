@@ -114,9 +114,9 @@ public class TestBinnedSpectra
         bs.CalculateScaleEstimates();
         double[] expected = new[]
         {
-            1.0d, 
-            0.937844, 
-            4.402658
+            0.0240773, 
+            0.023317, 
+            0.05052
         };
         Assert.That(bs.ScaleEstimates.Values.ToArray(), 
             Is.EqualTo(expected).Within(0.00001));

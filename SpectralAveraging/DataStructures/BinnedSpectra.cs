@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Data;
+using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection.Metadata.Ecma335;
@@ -25,6 +26,7 @@ namespace SpectralAveraging.DataStructures
         public SortedDictionary<int, double> Weights { get; private set; }
         public double[] Tics { get; private set; }
         public int NumSpectra { get; set; }
+        public int ReferenceSpectra => GetReferenceSpectra(); 
         private List<double[]> RecalculatedSpectra => PixelStackListToSpectra(); 
 
         public BinnedSpectra(int numSpectra)
@@ -33,8 +35,18 @@ namespace SpectralAveraging.DataStructures
             NoiseEstimates = new SortedDictionary<int, double>();
             ScaleEstimates = new SortedDictionary<int, double>();
             Weights = new SortedDictionary<int, double>();
-            NumSpectra = numSpectra; 
+            NumSpectra = numSpectra;
             Tics = new double[numSpectra];
+        }
+
+        public int GetReferenceSpectra()
+        {
+            if (Tics.Any())
+            {
+                return Tics.ToList().IndexOf(Tics.Max()); 
+            }
+
+            return 0;
         }
 
         private List<double[]> PixelStackListToSpectra()
@@ -195,12 +207,8 @@ namespace SpectralAveraging.DataStructures
                 for (int i = 0; i < NumSpectra; i++)
                 {
                     double[] tempValArray = PopIntensityValuesFromPixelStackList(i);
-                    double scale = BiweightMidvariance(tempValArray);
-                    if (i == 0)
-                    {
-                        reference = scale;
-                    }
-                    ScaleEstimates.TryAdd(i, reference / scale);
+                    double scale = Math.Sqrt(BiweightMidvariance(tempValArray));
+                    ScaleEstimates.TryAdd(i, scale);
                 }
 
                 return; 
@@ -262,6 +270,7 @@ namespace SpectralAveraging.DataStructures
 
         public void CalculateWeights()
         {
+            ScaleEstimates.TryGetValue(ReferenceSpectra, out double referenceScale);
             foreach (var entry in NoiseEstimates)
             {
                 var successScale = ScaleEstimates.TryGetValue(entry.Key,
@@ -272,7 +281,7 @@ namespace SpectralAveraging.DataStructures
                     out double noise);
                 if (!successNoise) continue;
 
-                double weight = 1d / Math.Pow((scale * noise), 2);
+                double weight = 1d / Math.Pow( 1 / ((referenceScale / scale) * noise), 2);
 
                 Weights.TryAdd(entry.Key, weight);
             }

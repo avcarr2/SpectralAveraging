@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -39,9 +40,11 @@ namespace SpectralAveraging
             BinnedSpectra binnedSpectra = new(numSpectra); 
             binnedSpectra.ConsumeSpectra(xArrays, yArrays, numSpectra, options.BinSize);
             binnedSpectra.RecalculateTics();
+
             if(options.PerformNormalization) binnedSpectra.PerformNormalization();
             // could be async
             binnedSpectra.CalculateNoiseEstimates();
+            
             binnedSpectra.CalculateScaleEstimates();
             binnedSpectra.CalculateWeights();
             // end 

@@ -104,8 +104,8 @@ public class PixelStack
 
         foreach (var weight in weightsDictionary)
         {
-            int index = _pixels.IndexOf(_pixels.Where(i => i.SpectraId == weight.Key).First()); 
-            if (_pixels[index].Rejected == true) continue;
+            int index = _pixels.IndexOf(_pixels.First(i => i.SpectraId == weight.Key)); 
+            if (_pixels[index].Rejected) continue;
 
             numerator += weight.Value * _pixels[index].Intensity;
             denominator += weight.Value; 

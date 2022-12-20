@@ -90,8 +90,9 @@ public static partial class OutlierRejection
         {
             double median = BasicStatistics.CalculateMedian(pixelStack.UnrejectedIntensities);
             double standardDeviation = BasicStatistics.CalculateStandardDeviation(pixelStack.UnrejectedIntensities);
-            n = 0; 
-            for (int i = 0; i < iterationN; i++)
+            n = 0;
+
+            for (int i = 0; i < pixelStack.Length; i++)
             {
                 if (pixelStack.IsIndexRejected(i)) continue; 
                 if (SigmaClipping(pixelStack.Intensity[i], median, standardDeviation, sValueMin, sValueMax))
@@ -135,7 +136,7 @@ public static partial class OutlierRejection
             double sigma = s * Math.Sqrt(median);
             n = 0;
 
-            for (int i = 0; i < iterationUnrejectedLength; i++)
+            for (int i = 0; i < pixelStack.Length; i++)
             {
                 if (pixelStack.IsIndexRejected(i)) continue;
                 if (SigmaClipping(pixelStack.Intensity[i], median, sigma, sValueMin, sValueMax))
@@ -188,7 +189,7 @@ public static partial class OutlierRejection
             } while (Math.Abs(stddev_current - stddev_previous) / stddev_previous > iterationLimitforHuberLoop);
 
             n = 0;
-            for (int i = 0; i < iterationN; i++)
+            for (int i = 0; i < pixelStack.Length; i++)
             {
                 if (pixelStack.IsIndexRejected(i)) continue;
                 if (SigmaClipping(pixelStack.Intensity[i], median, 
