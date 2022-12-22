@@ -9,6 +9,7 @@ using MathNet.Numerics.Distributions;
 using MathNet.Numerics.LinearAlgebra.Solvers;
 using MathNet.Numerics.Statistics;
 using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities;
+using NUnit.Framework.Interfaces;
 using Plotly.NET;
 using Plotly.NET.LayoutObjects;
 using SpectralAveraging;
@@ -165,6 +166,122 @@ namespace Tests
             Console.WriteLine(enr);
             results.Plot().Show();
         }
+
+        [Test, TestCase(100)]
+        public void TestMovingNoiseData(int numberSpectra)
+        {
+            // gaussian peak with new noise distribution that shifts x values differently each time 
+            List<GaussianPeak> peakList = new();
+
+            for (int i = 0; i < numberSpectra; i++)
+            {
+                Random random = new Random();
+                GaussianPeak baseGaussian = new GaussianPeak(500, 50, 1000, 0, 1.0, null, 1000);
+                // create a 50% chance that there will be a randomly occurring peak in the spectra. 
+                if (random.NextDouble() < 0.25)
+                {
+                    int peakLocation = random.Next(250, 750);
+                    int peakStddev = random.Next(1, 10);
+                    int baseIntensity = random.Next(250, 750);
+
+                    GaussianPeak noisePeak = new((double)peakLocation, (double)peakStddev, 1000, 0, 1.0, null,
+                        intensity: (double)baseIntensity);
+
+                    baseGaussian = (GaussianPeak)(baseGaussian + noisePeak); 
+                }
+
+                Normal xArrayNoise = new Normal(0, 0.01); 
+                NoiseData noise = new NoiseData(1000, 0, 1.0d, 10, 1); 
+                //noise.AddNoiseToXArray(xArrayNoise);
+                peakList.Add((GaussianPeak)(baseGaussian + noise));
+            }
+
+            var data = peakList.GetJaggedArrays();
+
+            var tics = peakList.CalculateTics();
+            SpectralAveragingOptions options = new SpectralAveragingOptions();
+            options.SetDefaultValues();
+            options.PerformNormalization = true;
+            options.BinSize = 1.0;
+            options.RejectionType = RejectionType.WinsorizedSigmaClipping;
+            options.SpectrumMergingType = SpectrumMergingType.MrsNoiseEstimate;
+            options.MinSigmaValue = 3.5;
+            options.MaxSigmaValue = 3.5;
+
+
+            var results = SpectralMerging.CombineSpectra(data.xArrays, data.yArrays,
+                tics, numSpectra:numberSpectra, options);
+            var averagedArray = data.yArrays.AverageJaggedArray();
+
+
+            data.yArrays[0].Plot(data.xArrays[0]).Show();
+            
+            var plot = results.Plot();
+            Layout layout = new Layout(); 
+            layout.SetValue("title", "Winsorized sigma clipping (100 spectra).");
+            layout.SetValue("plot_bgcolor", "#FFFFFF");
+            plot.WithLayout(layout); 
+            plot.Show();
+
+            averagedArray.Plot(data.xArrays[0]).Show(); 
+
+        }
+
+        [Test, TestCase(100)]
+        public void TestVaryingNoise(int numberSpectra)
+        {
+            // gaussian peak with new noise distribution that shifts x values differently each time 
+            List<GaussianPeak> peakList = new();
+
+            for (int i = 0; i < numberSpectra; i++)
+            {
+                Random random = new Random();
+                GaussianPeak baseGaussian = new GaussianPeak(500, 50, 1000, 
+                    0, 1.0, null, 100000);
+
+                double noiseIntensity = (double)random.Next(250, 750);
+                double noiseStddev = 0.25 * noiseIntensity;
+                NoiseData noise = new NoiseData(1000, 0, 1.0d,
+                    noiseIntensity, noiseStddev, random); 
+                
+                baseGaussian = (GaussianPeak)(baseGaussian + noise);
+                
+                //noise.AddNoiseToXArray(xArrayNoise);
+                peakList.Add((GaussianPeak)(baseGaussian + noise));
+            }
+
+            var data = peakList.GetJaggedArrays();
+
+            var tics = peakList.CalculateTics();
+            SpectralAveragingOptions options = new SpectralAveragingOptions();
+            options.SetDefaultValues();
+            options.PerformNormalization = true;
+            options.BinSize = 1.0;
+            options.RejectionType = RejectionType.WinsorizedSigmaClipping;
+            options.SpectrumMergingType = SpectrumMergingType.MrsNoiseEstimate;
+            options.MinSigmaValue = 3.5;
+            options.MaxSigmaValue = 3.5;
+
+
+            var results = SpectralMerging.CombineSpectra(data.xArrays, data.yArrays,
+                tics, numSpectra: numberSpectra, options);
+            var averagedArray = data.yArrays.AverageJaggedArray();
+
+
+            data.yArrays[0].Plot(data.xArrays[0]).Show();
+
+            var plot = results.Plot();
+            Layout layout = new Layout();
+            layout.SetValue("title", "Winsorized sigma clipping (100 spectra).");
+            layout.SetValue("plot_bgcolor", "#FFFFFF");
+            plot.WithLayout(layout);
+            plot.Show();
+
+            averagedArray.Plot(data.xArrays[0]).Show();
+
+        }
+
+
         private double MedianAbsoluteDeviationFromMedian(double[] array)
         {
             double arrayMedian = BasicStatistics.CalculateMedian(array);
@@ -176,7 +293,6 @@ namespace Tests
 
             return BasicStatistics.CalculateMedian(results);
         }
-
         private double BiweightMidvariance(double[] array)
         {
             double[] y_i = new double[array.Length];
@@ -215,6 +331,36 @@ namespace Tests
 
     public static class JaggedPlotter
     {
+        public static double[] AverageJaggedArray(this double[][] yArrays)
+        {
+            double[] results = new double[yArrays[0].Length]; 
+            for (int i = 0; i < yArrays.Length; i++)
+            {
+                double tic = yArrays[i].Sum(); 
+                for (int j = 0; j < yArrays[i].Length; j++)
+                {
+                    results[j] += yArrays[i][j] / tic; 
+                }
+            }
+
+            return results.Select(i => i / yArrays.Length).ToArray(); 
+        }
+        public static double[] CalculateTics(this List<GaussianPeak> peakList)
+        {
+            return peakList.Select(i => i.Yarray.Sum()).ToArray();
+        }
+        public static (double[][] xArrays, double[][] yArrays) GetJaggedArrays(this List<GaussianPeak> peakList)
+        {
+            double[][] xArrays = new double[peakList.Count][];
+            double[][] yArrays = new double[peakList.Count][];
+
+            for (int i = 0; i < peakList.Count; i++)
+            {
+                xArrays[i] = peakList[i].Xarray;
+                yArrays[i] = peakList[i].Yarray;
+            }
+            return (xArrays, yArrays);
+        }
         public static GenericChart.GenericChart Plot(this double[][] resultsJagged)
         {
             return Chart2D.Chart.Scatter<double, double, int>(resultsJagged[0], 
@@ -475,5 +621,36 @@ namespace Tests
 
         }
 
+    }
+
+    // generate a new noise data in each iteration of the loop. 
+    public class NoiseData : TestData
+    {
+        public NoiseData(int length, double startValue, double spacing, double mean, double stddev) : base(length,
+            startValue, spacing)
+        {
+            Normal distribution = new Normal(mean, stddev);
+            for (int i = 0; i < Yarray.Length; i++)
+            {
+                Yarray[i] = distribution.Sample();
+            }
+        }
+        public NoiseData(int length, double startValue, double spacing, double mean, double stddev, Random randomGenerator) : base(length,
+            startValue, spacing)
+        {
+            Normal distribution = new Normal(mean, stddev, randomGenerator);
+            for (int i = 0; i < Yarray.Length; i++)
+            {
+                Yarray[i] = distribution.Sample();
+            }
+        }
+
+        public void AddNoiseToXArray(Normal distribution)
+        {
+            for (int i = 0; i < Xarray.Length; i++)
+            {
+                Xarray[i] += distribution.Sample(); 
+            }
+        }
     }
 }
