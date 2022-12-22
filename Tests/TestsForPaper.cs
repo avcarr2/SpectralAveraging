@@ -281,6 +281,59 @@ namespace Tests
 
         }
 
+        [Test]
+        [TestCase(100)]
+        public void TestAdditionOfManyShotPeaks(int numberSpectra)
+        {
+            // gaussian peak with new noise distribution that shifts x values differently each time 
+            List<GaussianPeak> peakList = new();
+
+
+            for (int i = 0; i < numberSpectra; i++)
+            {
+                Random random = new Random();
+                GaussianPeak baseGaussian = new GaussianPeak(500, 50, 1000, 0, 1.0, null, 10000);
+                
+                // generate a random number of peaks 
+                int numberOfRandomPeaks = random.Next(10, 50);
+                for (int j = 0; j < numberOfRandomPeaks; j++)
+                {
+                    Random randomInnerLoop = new(); 
+                    double peakLocation = randomInnerLoop.Next(100, 900);
+                    double peakWidth = randomInnerLoop.Next(1, 5);
+                    double peakIntensity = randomInnerLoop.Next(100, 400);
+                    GaussianPeak peak = new(peakLocation, peakWidth, 1000, 0, 1.0, null, peakIntensity);
+                    baseGaussian = (GaussianPeak)(baseGaussian + peak); 
+                }
+
+                NoiseData noise = new NoiseData(1000, 0, 1.0d, 10, 1);
+                //noise.AddNoiseToXArray(xArrayNoise);
+                peakList.Add((GaussianPeak)(baseGaussian + noise));
+            }
+
+            var data = peakList.GetJaggedArrays();
+
+            var tics = peakList.CalculateTics();
+            SpectralAveragingOptions options = new SpectralAveragingOptions();
+            options.SetDefaultValues();
+            options.PerformNormalization = true;
+            options.BinSize = 1.0;
+            options.RejectionType = RejectionType.WinsorizedSigmaClipping;
+            options.SpectrumMergingType = SpectrumMergingType.MrsNoiseEstimate;
+            options.MinSigmaValue = 3.5;
+            options.MaxSigmaValue = 3.5;
+
+
+            var results = SpectralMerging.CombineSpectra(data.xArrays, data.yArrays,
+                tics, numSpectra: numberSpectra, options);
+            var averagedArray = data.yArrays.AverageJaggedArray();
+
+            data.yArrays[0].Plot(data.xArrays[0]).Show();
+            results.Plot().Show();
+            averagedArray.Plot(data.xArrays[0]).Show();
+        }
+
+
 
         private double MedianAbsoluteDeviationFromMedian(double[] array)
         {
