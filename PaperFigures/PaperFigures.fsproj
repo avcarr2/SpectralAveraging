@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+	  <Compile Include="Library.fs" />
+	  <None Include="SimulatedDataFigures.fsx" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MathNet.Numerics.FSharp" Version="5.0.0" />
+    <PackageReference Include="Plotly.NET" Version="3.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SpectralAveraging\SpectralAveraging.csproj" />
+    <ProjectReference Include="..\Tests\Tests.csproj" />
+  </ItemGroup>
+
+</Project>

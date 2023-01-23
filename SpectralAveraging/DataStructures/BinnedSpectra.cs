@@ -28,7 +28,6 @@ namespace SpectralAveraging.DataStructures
         public SortedDictionary<int, double> Weights { get; private set; }
         public double[] Tics { get; private set; }
         public int NumSpectra { get; set; }
-        public int ReferenceSpectra => GetReferenceSpectra(); 
         private List<double[]> RecalculatedSpectra => PixelStackListToSpectra(); 
         public int ReferenceSpectra { get; }
         /// <summary>
